@@ -26,6 +26,9 @@ private:
 	void CompareVehicleMovementComponents( const FString& PathA, const FString& PathB, const class UChaosWheeledVehicleMovementComponent* A, const UChaosWheeledVehicleMovementComponent* B);
 	void CompareSkeletalMeshComponents( const FString& PathA, const FString& PathB, const class USkeletalMeshComponent* A, const USkeletalMeshComponent* B);
 
+	// check the BP_Car->SkeletalMeshAsset->PhysicsAsset->BoneNames has wheel names for those names used in the ChaosWheeledVehicleMovementComponent->WheelSetup
+	void CheckWheelNames(const FString& Path, const USkeletalMeshComponent* SkeletalMeshComponent, const UChaosWheeledVehicleMovementComponent* VehicleMovementComponent);
+
 	// output messages
 	void AddMessage(const FString& Message, const EDifferenceType& Type );
 	void AddWarning(const FString& Message);

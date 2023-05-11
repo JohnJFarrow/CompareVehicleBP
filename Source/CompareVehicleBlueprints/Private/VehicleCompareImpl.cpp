@@ -16,6 +16,7 @@
 #include "GenericPlatform/GenericPlatformMath.h"
 #include "UObject\UnrealTypePrivate.h"
 #include "Difference.h"
+#include "ReferenceSkeleton.h"
 
 //error C4456 declaration of 'TypedProperty' hides previous local declaration
 
@@ -376,6 +377,8 @@ void UVehicleCompareImpl::CompareVehicleMovementComponents(
 	if (!A) return;
 	if (!B) return;
 
+	AddInfo("Comparing vehicle movement componnets " + PathA + " with " + PathB);
+
 	for (TFieldIterator<FProperty> It(UChaosWheeledVehicleMovementComponent::StaticClass()); It; ++It)
 	{
 		FProperty* Property = *It;
@@ -511,6 +514,18 @@ void UVehicleCompareImpl::CompareVehicleBlueprints(const FString& VehicleAssetPa
 		const FString NameB = SkeletalMeshComponents[1][i]->GetName();
 		CompareSkeletalMeshComponents(PathA + "/" + NameA, PathB + "/" + NameB, SkeletalMeshComponents[0][i], SkeletalMeshComponents[1][i]);
 	}
+
+	// compare wheel bone names with bones names in skeleton
+	for (int Vehicle = 0; Vehicle < 2; ++Vehicle)
+	{
+		MinI = FGenericPlatformMath::Min(SkeletalMeshComponents[Vehicle].Num(), VehicleMovementComponents[Vehicle].Num());
+
+		for (int i = 0; i < MinI; ++i)
+		{
+			CheckWheelNames(Paths[Vehicle], SkeletalMeshComponents[Vehicle][i], VehicleMovementComponents[Vehicle][i]);
+		}
+	}
+
 }
 
 
@@ -518,6 +533,8 @@ void UVehicleCompareImpl::CompareSkeletalMeshComponents(const FString& PathA, co
 {
 	if (!A) return;
 	if (!B) return;
+
+	AddInfo("Comparing skeletal mesh components " + PathA + " with " + PathB);
 
 	for (TFieldIterator<FProperty> It(USkeletalMeshComponent::StaticClass()); It; ++It)
 	{
@@ -611,5 +628,73 @@ void UVehicleCompareImpl::CompareProperty(const FString& PathA, const FString& P
 	}
 	else {
 		AddError( "No comparison done for property " + Property->GetName()) ;
+	}
+}
+
+// check the BP_Car ... BoneNames has wheel names for those names used in the ChaosWheeledVehicleMovementComponent->WheelSetup
+void UVehicleCompareImpl::CheckWheelNames(const FString& Path, const USkeletalMeshComponent* SkeletalMeshComponent, const UChaosWheeledVehicleMovementComponent* VehicleMovementComponent)
+{
+
+	if (!SkeletalMeshComponent) return;
+	if (!VehicleMovementComponent) return;
+
+	UPhysicsAsset* PhysicsAsset = SkeletalMeshComponent->GetPhysicsAsset();
+	if (!PhysicsAsset)
+	{
+		AddError("No physics asset for skeletal mesh component " + Path );
+		return;
+	}
+
+
+	// BP_Car->SkeletalMeshComponent->SkeletalMesh->Skeleton->FReferenceSkeleton->BoneInfo
+
+	USkeletalMesh* SkeletalMesh = SkeletalMeshComponent->GetSkeletalMeshAsset();
+	if(!SkeletalMesh)
+	{
+		AddError("No skeletal mesh for skeletal mesh component " + Path );
+		return;
+	}
+
+	USkeleton* Skeleton = SkeletalMesh->GetSkeleton();
+	if (!Skeleton)
+	{
+		AddError("No skeleton for skeletal mesh component " + Path);
+		return;
+	}
+
+	const FReferenceSkeleton Ref = Skeleton->GetReferenceSkeleton();
+
+	const TArray<FMeshBoneInfo>& BoneInfo = Ref.GetRefBoneInfo(); // or GetRawRefBoneInfo() ??
+
+	TArray<FName> BoneNames;
+
+	for ( const FMeshBoneInfo& Info: BoneInfo)
+	{
+		BoneNames.Add(Info.Name);
+	}
+
+	// now check the wheels 
+
+	const TArray<FChaosWheelSetup>& WheelSetups = VehicleMovementComponent->WheelSetups;
+	int count = 0;
+	for (const FChaosWheelSetup& WheelSetup : WheelSetups)
+	{
+		if (WheelSetup.BoneName.IsNone())
+		{
+			AddWarning("Wheel setup [" + FString::FromInt(count) + " has NONE for bone name");
+		}
+		else if (WheelSetup.BoneName == "")
+		{
+			AddWarning("Wheel setup [" + FString::FromInt(count) + " has empty bone name");
+		}
+		else
+		{
+			const bool bExists = BoneNames.Contains(WheelSetup.BoneName);
+			if (!bExists)
+			{
+				AddWarning( Path + " Wheel setup [" + FString::FromInt(count) + "] has bone name \"" + *WheelSetup.BoneName.ToString() + "\", this bone does not exist on the skeletal mesh " + SkeletalMesh->GetPathName());
+			}
+
+		}
 	}
 }
